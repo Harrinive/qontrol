@@ -75,7 +75,8 @@ def coherent_infidelity(
 
 
 def propagator_infidelity(
-    target_unitary: QArrayLike, cost_multiplier: float = 1.0, target_cost: float = 0.005
+    target_unitary: QArrayLike, cost_multiplier: float = 1.0, target_cost: float = 0.005, 
+    dim: int = None
 ) -> PropagatorInfidelity:
     r"""Instantiate the cost function for calculating infidelity of a propagator.
 
@@ -101,7 +102,8 @@ def propagator_infidelity(
             and whether the infidelity is below the target value.
     """
     target_unitary = asqarray(target_unitary)
-    dim = jnp.prod(jnp.array(target_unitary.dims))
+    if dim is None:
+        dim = jnp.prod(jnp.array(target_unitary.dims))
     return PropagatorInfidelity(cost_multiplier, target_cost, target_unitary, dim)
 
 

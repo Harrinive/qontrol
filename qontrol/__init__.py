@@ -17,6 +17,7 @@ from .model import (
     Model as Model,
     PropagatorModel as PropagatorModel,
     sepropagator_model as sepropagator_model,
+    sepropagator_correction_model as sepropagator_correction_model,
     sesolve_model as sesolve_model,
     SESolveModel as SESolveModel,
     SolveModel as SolveModel,

@@ -273,6 +273,22 @@ def mepropagator_model(
     H_function, tsave_or_function = _initialize_model(H_function, tsave_or_function)
     return MEPropagatorModel(H_function, tsave_or_function, jump_ops=jump_ops)
 
+def sepropagator_correction_model(
+    H_function: callable,
+    tsave_or_function: ArrayLike | callable,
+    correction_pre: callable,
+    correction_post: callable,
+) -> SECorrectedPropagatorModel:
+    H_function, tsave_or_function = _initialize_model(H_function, tsave_or_function)
+    correction_pre = jtu.Partial(correction_pre)
+    correction_post = jtu.Partial(correction_post)
+    return SECorrectedPropagatorModel(
+        H_function,
+        tsave_or_function,
+        correction_pre,
+        correction_post,
+    )
+
 
 def _initialize_model(
     H_function: callable, tsave_or_function: ArrayLike | callable
@@ -418,3 +434,32 @@ class MEPropagatorModel(PropagatorModel):
             options=options,
         )
         return result, new_H
+    
+class CorrectedPropagatorResult(eqx.Module):
+    final_propagator: QArray
+
+class SECorrectedPropagatorModel(SEPropagatorModel):
+    r"""
+    Model for Schrödinger-equation propagator with correction gates 
+    applied before and after the evolution.
+    """
+    correction_pre: callable
+    correction_post: callable
+
+    def __call__(
+        self,
+        parameters: Array | dict,
+        method: Method = Tsit5(),  # noqa B008
+        gradient: Gradient | None = None,
+        options: dq.Options = dq.Options(),  # noqa B008
+    ) -> tuple[Result, TimeQArray]:
+        result, new_H = super().__call__(
+            parameters, method, gradient, options
+        )
+        
+        props = result.final_propagator
+        corr_pre = self.correction_pre(parameters)
+        corr_post = self.correction_post(parameters)
+        corrected_prop = corr_post @ props @ corr_pre
+        
+        return CorrectedPropagatorResult(corrected_prop), new_H
