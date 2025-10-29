@@ -317,7 +317,7 @@ def _terminate_early(
         termination_key = 1
     # ftol
     dF = np.abs(total_cost - prev_total_cost)
-    if dF < opt_options['ftol'] * total_cost:
+    if dF < opt_options['ftol']:    # previously negative
         termination_key = 2
     if dx < opt_options['xtol'] * (opt_options['xtol'] + dx):
         termination_key = 3
