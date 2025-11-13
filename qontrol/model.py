@@ -437,6 +437,7 @@ class MEPropagatorModel(PropagatorModel):
     
 class CorrectedPropagatorResult(eqx.Module):
     final_propagator: QArray
+    propagators: list[QArray]
 
 class SECorrectedPropagatorModel(SEPropagatorModel):
     r"""
@@ -462,4 +463,6 @@ class SECorrectedPropagatorModel(SEPropagatorModel):
         corr_post = self.correction_post(parameters)
         corrected_prop = corr_post @ props @ corr_pre
         
-        return CorrectedPropagatorResult(corrected_prop), new_H
+        return CorrectedPropagatorResult(
+            corrected_prop, result.propagators
+        ), new_H
