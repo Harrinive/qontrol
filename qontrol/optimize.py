@@ -104,6 +104,8 @@ def optimize(
     total_cost_over_epochs = []
     cost_values_over_epochs = []
     epoch_times = []
+    min_total_cost = np.inf
+    best_parameters = parameters
 
     def _init_saved_parameters(_parameters: ArrayLike | dict) -> list | dict:
         if isinstance(_parameters, dict):
@@ -113,6 +115,7 @@ def optimize(
     parameters_since_last_save = _init_saved_parameters(parameters)
     previous_parameters = parameters
     last_save_epoch = 0
+    termination_key = 0
 
     # Initialize plotter if needed
     if plotter is None and opt_options['plot']:
@@ -154,6 +157,9 @@ def optimize(
 
             # Unpack and record results
             total_cost, cost_values, terminate_for_cost, expects = aux
+            if total_cost < min_total_cost:
+                min_total_cost = total_cost
+                best_parameters = parameters
             total_cost_over_epochs.append(total_cost)
             cost_values_over_epochs.append(cost_values)
             epoch_times.append(elapsed_time)
@@ -213,6 +219,8 @@ def optimize(
                 if termination_key != -1:
                     break
 
+            previous_parameters = parameters
+
     except KeyboardInterrupt:
         pass
 
@@ -248,7 +256,7 @@ def optimize(
     )
     if opt_options['verbose'] and filepath is not None:
         print(f'results saved to {filepath}')
-    return parameters
+    return best_parameters
 
 
 def loss(
