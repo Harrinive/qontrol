@@ -4,22 +4,22 @@ from collections.abc import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
-from dynamiqs.time_qarray import ConstantTimeQArray, SummedTimeQArray, TimeQArray
 from IPython.display import clear_output
 from jax import Array
 from matplotlib.pyplot import Axes
 
 from .cost import Cost, SummedCost
 from .model import Model
+from .utils.utils import get_hamiltonians
 
 
 def plot_costs(
-    ax: Axes, costs: Cost, epoch: int, cost_values_over_epochs: list
+    ax: Axes, costs: Cost, cost_values_over_epochs: list | np.ndarray
 ) -> Axes:
     """Plot the evolution of the cost function values."""
     ax.set_facecolor('none')
-    epoch_range = np.arange(epoch + 1)
     cost_values_over_epochs = np.asarray(cost_values_over_epochs).T
+    epoch_range = np.arange(len(cost_values_over_epochs[0]))
     if isinstance(costs, SummedCost):
         for _cost, _cost_value in zip(
             costs.costs, cost_values_over_epochs, strict=True
@@ -37,24 +37,13 @@ def plot_costs(
     return ax
 
 
-def get_controls(H: TimeQArray, tsave: np.ndarray) -> list[np.ndarray]:
-    """Extract the Hamiltonian prefactors at the supplied times."""
-
-    def evaluate_at_tsave(_H: TimeQArray) -> np.ndarray:
-        if not isinstance(_H, ConstantTimeQArray):
-            return _H.prefactor(tsave)
-        return np.zeros_like(tsave)
-
-    controls = []
-    if isinstance(H, SummedTimeQArray):
-        for _H in H.timeqarrays:
-            if isinstance(_H, ConstantTimeQArray):
-                controls.insert(0, evaluate_at_tsave(_H))
-            else:
-                controls.append(evaluate_at_tsave(_H))
-    else:
-        controls.append(evaluate_at_tsave(H))
-    return controls
+def _get_control_to_plot(control: Array) -> Array:
+    # If there are batch dimensions, H has been broadcast to have those same
+    # dimensions: we only want to plot the controls without these batch dims
+    n_dims = len(control.shape)
+    if n_dims > 1:
+        return control[(slice(None),) + (n_dims - 1) * (0,)]
+    return control
 
 
 def plot_controls(
@@ -64,10 +53,11 @@ def plot_controls(
     ax.set_facecolor('none')
     H = model.H_function(parameters)
     tsave = model.tsave_function(parameters)
-    controls = get_controls(H, tsave)
+    controls = [_H.prefactor(tsave) for _H in get_hamiltonians(H)]
     H_labels = [f'$H_{idx}$' for idx in range(len(controls))]
     for idx, control in enumerate(controls):
-        ax.plot(tsave, np.real(control), label=H_labels[idx])
+        control_to_plot = _get_control_to_plot(control)
+        ax.plot(tsave, np.real(control_to_plot), label=H_labels[idx])
     ax.legend(loc='lower right', framealpha=0.0)
     ax.set_ylabel('pulse amplitude')
     ax.set_xlabel('time [ns]')
@@ -81,10 +71,11 @@ def plot_fft(
     ax.set_facecolor('none')
     H = model.H_function(parameters)
     tsave = model.tsave_function(parameters)
-    controls = get_controls(H, tsave)
+    controls = [_H.prefactor(tsave) for _H in get_hamiltonians(H)]
     for control_idx, control in enumerate(controls):
-        y_fft = np.fft.fft(control)
-        n = len(control)
+        control_to_plot = _get_control_to_plot(control)
+        y_fft = np.fft.fft(control_to_plot)
+        n = len(control_to_plot)
         dt = tsave[1] - tsave[0]
         freqs = np.fft.fftfreq(n, dt)
         ax.plot(freqs[: n // 2], np.abs(y_fft[: n // 2]), label=f'$H_{control_idx}$')
@@ -196,7 +187,7 @@ def custom_plotter(plotting_functions: list[Callable]) -> Plotter:
             ]
         )
         ```
-        See for example [this tutorial](../examples/qubit).
+        See for example [this tutorial](examples/qubit.ipynb).
     """
     return Plotter(plotting_functions)
 
@@ -212,8 +203,7 @@ class Plotter:
         costs: Cost,
         model: Model,
         expects: Array | None,
-        cost_values_over_epochs: list,
-        epoch: int,
+        cost_values_over_epochs: list | np.ndarray,
     ):
         clear_output(wait=True)
         n_col = 4 if self.n_plots >= 4 else self.n_plots
@@ -222,7 +212,7 @@ class Plotter:
         if n_rows == 1:
             axes = axes[None]
         fig.patch.set_alpha(0.1)
-        axes[0, 0] = plot_costs(axes[0, 0], costs, epoch, cost_values_over_epochs)
+        axes[0, 0] = plot_costs(axes[0, 0], costs, cost_values_over_epochs)
         for plot_idx in range(self.n_plots - 1):
             row_idx, col_idx = np.unravel_index(1 + plot_idx, (n_rows, n_col))
             axes[row_idx, col_idx] = self.plotting_functions[plot_idx](
@@ -230,6 +220,7 @@ class Plotter:
             )
         plt.tight_layout()
         plt.show()
+        plt.close()
 
 
 class DefaultPlotter(Plotter):

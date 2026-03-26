@@ -5,9 +5,10 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from dynamiqs import asqarray, isket, QArray, QArrayLike, TimeQArray
 from dynamiqs.result import PropagatorResult, SolveResult
-from dynamiqs.time_qarray import ConstantTimeQArray, SummedTimeQArray
 from jax import Array
 from jax.nn import relu
+
+from .utils.utils import get_hamiltonians
 
 
 def incoherent_infidelity(
@@ -437,21 +438,9 @@ class ControlCost(Cost):
         self, result: SolveResult, H: TimeQArray, func: callable
     ) -> Array:
         dt = result.tsave[1] - result.tsave[0]
-
-        def _evaluate_at_tsave(_H: TimeQArray) -> Array:
-            if not isinstance(_H, ConstantTimeQArray):
-                return jnp.sum(func(_H.prefactor(result.tsave))) * dt
-            return jnp.array(0.0)
-
-        if isinstance(H, SummedTimeQArray):
-            control_val = 0.0
-            # ugly for loop, having trouble with vmap or scan because only PWCTimeQArray
-            # and ModulatedTimeQArray have attributes prefactor
-            for _H in H.timeqarrays:
-                control_val += _evaluate_at_tsave(_H)
-        else:
-            control_val = _evaluate_at_tsave(H)
-
+        control_val = 0.0
+        for _H in get_hamiltonians(H):
+            control_val += jnp.sum(func(_H.prefactor(result.tsave))) * dt
         return control_val
 
 
